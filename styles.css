@@ -3,5 +3,20 @@ body{background-color:#d1f0ea;
 
 h1{
   color:black; 
+}
 
+#lisa{
+  width:400px;
+  height:auto;
+}
+
+a:visited{
+  color:#000d31;
+}
+
+a:active{
+  color:#000d31;
+}
+a:hover{
+  color: blueviolet;
 }
