@@ -1,5 +1,7 @@
-body{background-color:#d1f0ea;
-  ;}
+body{
+  background-color:#d1f0ea;
+  text-align:center;
+}
 
 h1{
   color:black; 
@@ -8,6 +10,21 @@ h1{
 .lisa{
   width:400px;
   height:auto;
+}
+
+#about{
+  margin-left:200px;
+  margin-right:200px;
+}
+
+
+ul {
+  list-style-type: none; /* Ensures default bullets are used */
+  list-style-position: outside; /* Keeps bullets aligned properly */
+  display: flex;
+  flex-direction: column; /* Ensures vertical alignment */
+  align-items: center; /* Centers the list items */
+  padding: 0;
 }
 
 a:visited{
