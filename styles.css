@@ -26,13 +26,14 @@ ul {
   padding: 0;
 }
 
+a:active{
+  color:#000d31;
+}
+
 a:visited{
   color:#000d31;
 }
 
-a:active{
-  color:#000d31;
-}
 a:hover{
   color: blueviolet;
 }
