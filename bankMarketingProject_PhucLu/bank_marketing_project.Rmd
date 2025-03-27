@@ -1,0 +1,922 @@
+---
+title: "PSTAT 131: Bank Marketing Project"
+author: "Phuc Lu"
+date: "Dec 8, 2024"
+output:
+    html_document:
+      toc: true
+      toc_float: true
+      code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include = FALSE}
+library(dplyr)
+library(tidyverse)
+library(tidymodels)
+library(corrplot)
+library(themis)
+library(MASS)
+library(kknn)
+library(stringr)
+library(ggplot2)
+```
+
+![](./Images/Telemarketing-Service.jpg)
+
+## Introduction
+
+For this project, I will be looking at a data set called "Bank Marketing". This data set was donated to the UCI Machine Learning Repository back in February 13, 2012. This data is related to a Portuguese banking institution's direct marketing campaign.
+
+I will be using information from this paper by Moro et. al for more background information and reference about the data.
+[Moro, S., Cortez, P., & Rita, P. (2014). A data-driven approach to predict the success of bank telemarketing. Decis. Support Syst., 62, 22-31.](https://www.sciencedirect.com/science/article/pii/S016792361400061X?via%3Dihub#s0010)
+
+The original focus of the research was targeting through telemarketing to sell long-term deposits to customers. Behind the campaign, the human agents made phone calls to a list of clients to get them to buy the deposit. Additionally, if a client calls the bank's contact center for any other reason, the client was asked to subscribe the deposit (inbound). Hence, the result is a binary in that unsuccessful or successful contact in getting the clients to buy a long-term deposit. The data were gathered from May 2008 to November 2010. 
+
+To obtain this data, I will be downloading it as a zipped file and unzip it obtain the CSV file. To get ready to analyze the data, I will then load it into R using the read.csv command. There are a total of 45211 observations in this data set. This data contains 17 total variables, including the binary response variable. Each variable may include four distinct types of data. The values can be integer, categorical, binary, or date. As said before, the response is going to be binary. There are no missing data in this data set.
+
+Since this data is related to a telemarketing campaign from a Portuguese banking institution, I'm interested in use the data to predict if the client will subscribe to a term deposit. Beside from predicting customer response, I also want to examine the nature and characteristics of our customers. In addition, I want to be able to identify potential weakness of the campaign, so that the bank can have a more successful campaign in the future.
+
+The response is going to be the variable `y` in the data set. It will be renamed to `subscribe` to better fit the context of our problem. The response variable is a binary response of "yes" or "no", indicating if the client has subscribed to a term deposit or not. Since the purpose is to predict a binary response, a classification approach will be used.
+
+### Many Data Sets
+
+The `.zip` data file from UC Irvine Machine Learning Repository contains 4 separate `.csv` files.
+
+1) `bank-additional-full.csv` with 41188 all observations and 20 features, ordered by date (from May 2008 to November 2010). This data set is also very close to the data analyzed in [Moro, S., Cortez, P., & Rita, P. (2014). A data-driven approach to predict the success of bank telemarketing. Decis. Support Syst., 62, 22-31.](https://www.semanticscholar.org/paper/A-data-driven-approach-to-predict-the-success-of-Moro-Cortez/cab86052882d126d43f72108c6cb41b295cc8a9e)
+
+2) `bank-additional.csv` contains 10% of the randomly selected observations from `bank-additional-full.csv` and has 20 features
+
+3) `bank-full.csv` with all 41188 observations and 17 features, ordered by date. This data set is an older version of `bank-additional.csv`, but with less features.
+
+4) `bank.csv` with 10% of the examples and 17 inputs, randomly selected from `bank-full.csv`. In other words, this dataset is an older version of the aforementioned dataset but with less features).
+
+UC Irvine Machine Learning Repository noted that the smallest data sets are provided to test more computationally demanding machine learning algorithms (e.g., SVM).
+
+For this project, we'll be using `bank_full.csv` for it's high number of observations and features. We want a nice balance between number of observations and features.
+
+### Defining Our Features
+
+`bank_full.csv` contains 17 features, including the response variable.
+
+1. `age` is a numeric variable representing our clients' age.
+2. `job` is a categorical variable representing the type of jobs of our clients.
+  The different job categories include: "admin", "unknown", "unemployed", "management", "housemaid", "entrepreneur", "student", "blue-collar", "self-employed", "retired", "technician", "services".
+3.  `marital` is a categorical variable representing the clients' marital status. The categories include "married", "divorced", "single". By "divorced", we mean means divorced or widowed.
+4. `education` is a categorical variable representing the level of education a particular client has received. The categories include "unknown"," secondary", "primary", "tertiary".
+5. `default` is a binary variable representing if whether a particular client has credit in default.
+6. `balance` is a numerical variable representing a particular client's average yearly balance, in euros.
+7. `housing` is a binary variable representing if whether a particular client has any housing loan.
+8. `loan` is a binary variable presenting if whether a particular client has any personal loan.
+
+##### related with the last contact of the current campaign:
+
+9. `contact` is a categorical variable representing a particular client's contact communication type. The categories include: "unknown", "telephone", "cellular".
+10. `day` represent the day of week that a particular client was last contacted.
+11. `month` represent the time, in month that we had contacted a particular client.
+12. `duration` represent the last contact duration with a particular client, in seconds.
+
+##### other attributes:
+
+13. `campaign` represent the number of contacts performed *during this current campaign* and for this client.
+14. `pdays` represent the number of days that have passed by after the client was last contacted from a previous campaign. Note that `-1` means that the client was not previously contacted.
+15. `previous` represent the number of contacts performed *before this campaign* and for this client.
+16. `poutcome` represent the outcome of the previous marketing campaign. The categories include "unknown", "other", "failure", "success".
+17. `y` renamed as `subscribe` is a binary response variable representing if whether the client has subscribed a term deposit with this bank.
+
+
+```{r, include = FALSE}
+## loading data into R
+bank_full <- read.csv("./bank+marketing/bank/bank-full.csv", sep = ";")
+```
+
+### Data Source Citation
+
+Moro, S., Rita, P., & Cortez, P. (2014). Bank Marketing [Dataset](https://archive.ics.uci.edu/dataset/222/bank+marketing). UCI Machine Learning Repository. https://doi.org/10.24432/C5K306.
+
+---
+
+## Exploratory Data Analysis
+
+
+```{r}
+bank_data <- bank_full
+
+bank_data <- bank_data %>%
+  rename(subscribe = y) %>% 
+  mutate(subscribe = factor(subscribe))
+```
+
+### Missing Data
+
+```{r, fig.cap= "Initially, we see that we don't have any missing data in the data. However, this is actually misleading because there are  'unknown' values and categories in several features when we defined the features."}
+library(naniar)
+vis_miss(bank_data)
+```
+#### Dealing with Unknown Values
+
+With the `unknown` values, there are two options that we can take. We can re-enter them as `NA` or have an indicator attached to the variables with `unknown` values.
+
+We're going to modify the data so that `unknown` inputs are replaced with `NA` to get a better representation of how much is "unknown" in the data.
+```{r}
+bank_data <- bank_data %>%
+  mutate(poutcome = ifelse(poutcome == "unknown", NA, poutcome)) %>%
+  mutate(contact = ifelse(contact == "unknown", NA, contact)) %>%
+  mutate(job = ifelse(job == "unknown", NA, job)) %>% 
+  mutate(education = ifelse(education == "unknown", NA, education)) %>% 
+  mutate(pdays = ifelse(pdays == -1, NA, pdays))
+```
+
+```{r, fig.cap= "After mutating the 'unknown' values into 'NA', we're able to get a better picture of our data. This graphic tells us that we have a lot of missing data for pdays and poutcome (82% missing in each). We lack information for 29% clients' contact. This means that we don't have a information on the client contact, whether it's via telephone or cellphone. We simply don't know what they contacted us. We also have a small amount of missing information on clients' job and attained level of education."}
+library(naniar)
+vis_miss(bank_data)
+```
+
+### Previous Contacts to Clientele
+
+To figure out how this variable is distributed, a single initial approach is to simply graph out the density.
+
+Recall that `previous` represent the number of contacts performed *before this campaign* and for this client.
+
+```{r, fig.cap = "This graph shows the density of number of calls made to clients prior to this campaign. We can see that the number of contacts made previously to the clients is close to nothing. This shows that we're not really trying to reach clients about anything. This is not a good distribution from the marketing perspective because we have almost no outreach to the clients. This will negatively impact the marketing campaign because we haven't established a relationship with our clientele yet. Thus, we cannot expect a high term deposit subscription rate."}
+ggplot(bank_data, aes(x  = previous)) + geom_density() + ggtitle("Distsribution of Number of Previous Contacts to Clients")
+```
+
+```{r, fig.cap = "The point of this second density curve is to see the mode. Here, we're zoomming in closer to 0 on the x-axis and ignore the tail of the distribution. As the number of contacts made previously to the clients decreases to 0, we see a growing density. We see some bumps from 3 to 5 contacts, but these are nothing compare to the overhelming amount of 0 previous contacts. Hence, we should increase efforts to establish a relationship with the clientele by reaching out more. This way, they'll trust us more and be more willing to subscribe to the term deposit."}
+test3 <- bank_data %>% 
+  filter(previous <= 10)
+ggplot(test3, aes(x  = previous)) + geom_density() + ggtitle("Closer Look at Distribution of Number of Previous Contacts to Clientele")
+```
+There are the summary statistics for the number of contacts made previously to the clientele.
+```{r}
+summary(bank_data$previous)
+```
+
+```{r}
+paste("mean:",  round(mean(bank_data$previous), 4))
+paste("standard deviation:", round(sd(bank_data$previous), 4))
+```
+
+The summary statistics agree with the visualizations. However, we notice that the bank has contacted a client a total of 275 times. This is definitely an unusual observation.
+
+Here are the information for this client.
+```{r}
+bank_data %>% 
+  filter(previous == 275)
+```
+We're not sure what's going on with this client. We can guess that this person probably has a long history with the bank or they had a lot of issues with the bank in the past.
+
+From the curves, we do see that there were some trailing observations to right of the mode. These unusual observation--including the man with 275 previous contacts, did increase the mean by a tiny bit. This is why the mean 0.5803 and the median 0 doesn't line up exactly. We also see that the trailing observations and the unusal one have their effect on the standard deviation. That is, each obeservation deviates 2.3034 away from the mean on average.
+
+### Adding Variable Year
+
+UCI Machine Learning Repository mentioned that the observations in this data set were ordered by date. That is from May 1 to December 31 of 2008, January 1 to December 31 of 2009, and January 1 to November 17 of 2010. The trouble here is that the data set doesn't contain the variable to specify the year. For example, suppose that we have three different "May 12". We know that there are three different days from three different years because of how they were ordered in the data set. However, when the ordering falls apart, say due to taking samples from the data, unless we have a choke hold on the order of each observation, there is no way to distinguish two or more days that share the same month and day. Hence, we should incorporate a `year` variable to note the ordering of the dates without actually having to order the whole data set by observation.
+
+From ordering the observations, we can pick out that the first day in the data set is May 5, 2008 and
+the last day is November 17, 2010.
+
+```{r}
+## Adding a year variable to data. 
+month_map <- c("jan" = 1, "feb" = 2, "mar" = 3, "apr" = 4, "may" = 5, "jun" = 6,
+               "jul" = 7, "aug" = 8, "sep" = 9, "oct" = 10, "nov" = 11, "dec" = 12)
+
+bank_data$month_num <- month_map[bank_data$month]
+
+start_year <- 2008
+bank_data$year <- NA
+current_year <- start_year
+previous_month <- 5 
+
+for (i in 1:nrow(bank_data)) {
+  if (bank_data$month_num[i] < previous_month) {
+    current_year <- current_year + 1
+  }
+  bank_data$year[i] <- current_year
+  previous_month <- bank_data$month_num[i]
+}
+bank_by_year <- split(bank_data, bank_data$year)
+
+```
+
+```{r}
+year2008 <- bank_by_year$"2008"
+year2009 <- bank_by_year$"2009"
+year2010 <- bank_by_year$"2010"
+
+year2008$year <- rep(2008, times = length(nrow(year2008)))
+year2009$year <- rep(2009, times = length(nrow(year2009)))
+year2010$year <- rep(2010, times = length(nrow(year2010)))
+
+library(dplyr)
+bank_data <- bind_rows(year2008, year2009, year2010)
+bank_data <- subset(bank_data, select = -month_num)
+```
+
+
+
+```{r, message = FALSE, fig.cap= "These three percent stacked charts shows the proportion of clients who are subscribed and who are not over the span of three years. We do see a gradual increase in proportion of clients subscribing to the term deposit over the years."}
+
+library(gridExtra)
+library(stringr)
+
+p2008 <- ggplot(year2008, aes(x = factor(str_to_title(month), levels = month.abb), fill = subscribe)) + geom_bar(position = "fill") +   scale_y_continuous(labels = scales::percent) + xlab("Month") + ylab("Proportion") + ggtitle("Proportion of Subscription in 2008")
+
+p2009 <- ggplot(year2009, aes(x = factor(str_to_title(month), levels = month.abb), fill = subscribe)) + geom_bar(position = "fill") +   scale_y_continuous(labels = scales::percent) + xlab("Month") + ylab("Proportion") + ggtitle("Proportion of Subscription in 2009")
+
+p2010 <- ggplot(year2010, aes(x = factor(str_to_title(month), levels = month.abb), fill = subscribe)) + geom_bar(position = "fill") +   scale_y_continuous(labels = scales::percent) + xlab("Month") + ylab("Proportion") + ggtitle("Proportion of Subscription in 2010")
+
+grid.arrange(p2008, p2009, p2010, nrow = 3)
+```
+
+```{r, fig.cap= "This percent stacked graph shows the proportion of no and yes responses to subscribing to the term deposit. Over the span of three years, we see that the proportion of yes has increased. In fact, there is a large increase from 2009 to 2010, by a little more than double. We currently don't know the exact reason. Perhaps it's due to advancements in data collection or more marketing attemps to get the audience to subscribe."}
+ggplot(bank_data, aes(x = year, fill = subscribe)) + geom_bar(position = "fill") +   scale_y_continuous(labels = scales::percent) + xlab("Month") + ylab("Proportion")
+```
+
+### Clientele Age
+
+```{r, fig.cap = "This histogram shows the distribution of age for our clientele. Most of our clients are 30 to 35 years old. There is big increase in number of clients' age from 25 to 30. This tells us there is a large count gap the between the two groups. We also see a gradual decrease in clientele as we go from 40 to 60 years old. There is a great decrease in number of clients going from 60 to 65. Altogether, these trend tells us that our main clientele demographic are between 35 to 60 years old."}
+ggplot(bank_data, aes(age)) + geom_histogram(fill= "cadetblue", binwidth = 5)  +
+  ggtitle("Histogram of Clientele Age") +scale_x_continuous(breaks = seq(0, 100, by= 5))
+```
+
+```{r}
+summary(bank_data$age)
+```
+Taking a closer look at the numbers, we see that our clients on average are about 41 years old. Our oldest clients are 95 years old and the youngest clients are 18 year old.
+
+#### Proportion of Response Over Time
+
+These months are a collection of months throughout many years grouped together. The goal is to identify patterns and trend between clients' responses throughout months of the year.
+
+```{r, fig.cap= "Combining data from all three years, we see that most people are not subscribed to the term deposit in May by a huge proportion, followed by the other summer months form June to August. Do note the caveat that we do not have data from January to April in 2008. However, since our data is massively imbalanced as a whole, it's difficult tell trends for yes responses. We see that he months with the lowest responses overall such as March, October, and December, we see an almost a 50/50 split response between subscribed and not subscribed. There could be oversampling of clients who are not subscribed, but that's expected for this particular problem, since all campaigns start with 0 subscription, while more campaigns are launched to get more people to subscribe. Some of our weakest months are January, May to August, and November as these has the proportion of clients who are subscribed to the term deposit."}
+
+
+ggplot(bank_data, aes(fill = subscribe, x = month)) + 
+  geom_bar(position = "fill") +
+  xlab("Month") +
+  ylab("Proportion")+
+  scale_y_continuous(labels = scales::percent) +
+  ggtitle("Proportion of Client Response By Month")
+```
+
+```{r, fig.cap= "Here upsampling and downsampling was done via the function from the package groupdata2 to balance the response. From both process, the mode for clients who are not subscribed to the term deposit is still May, followed by the rest of the summer months from June to August. Overall, the shape of is still the same, except more people are subscribed than those who are not. This serves as a hypothetical visualization if we were able to get more people to subscribe. "}
+library(groupdata2)
+bank_data_up <- upsample(bank_data, cat_col = "subscribe")
+
+up <- ggplot(bank_data_up, aes(fill = subscribe, x = factor(str_to_title(month), level = month.abb))) + geom_bar(position = "fill") + scale_y_continuous(labels = scales::percent) + xlab("Month") + ylab("Proportion") + ggtitle("Upsampled Proportion") + theme(axis.text.x = element_text(angle = 45))
+
+bank_data_down <- downsample(bank_data, cat_col = "subscribe")
+
+down <- ggplot(bank_data_down, aes(fill = subscribe, x = factor(str_to_title(month), level = month.abb))) + geom_bar(position = "fill") + scale_y_continuous(labels = scales::percent) + xlab("Month") + ylab("Proportion") + ggtitle("Downsampled Proportion") + theme(axis.text.x = element_text(angle = 45))
+
+grid.arrange(up, down, nrow = 1)
+```
+
+### Clientele Occupation
+
+```{r, fig.cap = "From this bar chart, we can see that the top three most common jobs amongst our customers are blue-color, management, and technician. There is a small number of unknown jobs, which means that we do not have information about those few customers' occupation."}
+ggplot(bank_data, aes(job)) + geom_bar() +  theme(axis.text.x = element_text(angle = 45)) + xlab("Occupation") + ggtitle("Distribution of Clientele Occupation")
+```
+In combination with the distribution of age, we can see that our main clientele are probably 35 to 41 years old blue-color or management workers.
+
+---
+
+### Splitting Data
+```{r}
+bank_data <- bank_data %>% 
+  mutate(across(where(is.character), as.factor))
+
+set.seed(123)
+bank_data_split <- initial_split(bank_data, strata = "subscribe", prop = 0.75)
+bank_train <- training(bank_data_split)
+bank_test <- testing(bank_data_split)
+bank_fold <- vfold_cv(bank_train, v = 5)
+```
+
+
+```{r}
+dim(bank_train)
+```
+We have 33907 observations and 18 features (this includes the response variable) in our training data set.
+
+#### EDA in Training Set
+
+As shown in the EDA process, our data is very imbalanced, but here are the numbers in the training data.
+
+```{r}
+bank_data %>%
+  group_by(subscribe) %>%
+  summarise(prop = n()/(dim(bank_train)[1]))
+```
+```{r, fig.cap = "We're doing a bit of EDA on the training data to see decide if we can omit the missing data. This chart shows the same thing as with the whole data set. There is a lot of mising data in pdays and pouttcome. We also don't have contact with 29% of out clients. We lack a very small amount of data on our clients' educational attainment and martial status."}
+vis_miss(bank_train)
+```
+Since `pdays` and `poutcome` have so much missing data, we think that it won't be a very good predictor for predicting clients' response. However, moving forward we can try to do some hypothesis testing on those two predictors. As for the other predictors, we can try imputation methods to fill in for the missing data.
+
+### Correlation
+```{r}
+omit_na_bt <- na.omit(bank_train)
+omit_na_bt %>%
+  select_if(is.numeric) %>%
+  cor() %>%
+  corrplot(method = "number", type = "lower", diag=  FALSE)
+```
+
+There is a slight correlation between pdays and previous days. This makes sense since
+- `pdays` represent the number of days that passed by after the client was last contacted from a previous campaign, while
+- `previous` represent the number of contacts performed before this campaign and for this client.
+If the client had been contacted previously, then there must've been data that tracks the number of days and number of contacts since the last interaction. These two are fully correlated because there would've been some other forms of interaction between the client and the bank that are not related to the campaign between the times of the previous campaign and time of data collection.
+
+---
+
+## Variable Selection
+
+This full model includes all features except for `pdays` and `poutcome` since they have a lot of missing values. Since we have a large data set, we'll be fine to include `contact`, `education`, and `job` by removing the missing observations.
+
+```{r, include = FALSE}
+full <- glm(subscribe ~ age + job + marital + education + default + balance + 
+                        housing + loan + contact + day + month + duration + campaign + previous + year, data = na.omit(bank_train),  family = binomial)
+```
+
+### Variable Selection with AIC (Akaike Information Criterion)
+
+We're going to use AIC to do variable selection from the full model.
+```{r, include = FALSE}
+reduced_by_AIC <- stats::step(full)
+```
+
+```{r}
+summary(reduced_by_AIC)
+```
+
+It should be obvious and seemingly redundant to compare models after applying AIC since the excluded features were excluded because they were not significant. However, it's worth it to take a closer look behind the scene.
+
+Given the two models, we're going to perform a hypothesis test to compare them to see which one is better.
+
+Let reduced model refer to the model that was selected via AIC and full model represent a model with all features except for `pdays` and `poutcome`.
+
+$H_o$: reduced model is better versus $H_a$: full model is better
+
+Since the response is binary, we're going to perform a Chi-squared test to compare the two models.
+We're also going to use $\alpha = 0.05$ significance level.
+
+We reject $H_o$ if the p-value of the reduced model is less than $\alpha = 0.05$
+
+```{r}
+anova(reduced_by_AIC, full, test = "Chisq")
+```
+In this output, model 1 refers to the reduced model as a result of AIC and model 2 is the full model with all features except for `pdays` and `poutcome`. Since the p-value is greater than $\alpha$, that is $0.3005 > 0.05$, we fail to reject $H_0$. This means that the full model doesn't explain significantly more variation than the reduced model.
+
+### Variable Selection with Regularization (Lasso Regression)
+
+```{r, message = FALSE, warning=FALSE}
+library(glmnet)
+x <- model.matrix(subscribe ~ age + job + marital + education + default + balance + 
+                        housing + loan + contact + day + month + duration + campaign + previous + year, data = na.omit(bank_train))[,-1] # remove intercept column
+y <- na.omit(bank_train)$subscribe
+
+fit_lasso <- glmnet(x, y, alpha = 1, family = "binomial")
+```
+
+```{r, fig.cap = "This graph shows the shrinkage of the features in our model. Each colored line represent a feature in the model. We use lambda as the penalty parameter. As L1 Norm decreases, this corresponds to an increase in the penalty parameter lambda, which shrinks the all variables (eventually to 0). When L1 increases, it means that lambda gets smallers and thus we have less penalty and more features on the right side of the graph."}
+
+plot(fit_lasso, main = "Feature Shrinkage via Lasso Regression")
+```
+
+We're going to use k-fold cross validation, $k = 5$, to find the best $\lambda$ for variable selection.
+```{r, include = FALSE}
+set.seed(123)
+
+y = ifelse(y == "yes", 1, 0)
+
+fit.glmnet.5foldCV <- cv.glmnet(x, y, alpha=1, nfolds=5)
+```
+
+These results are when we use the smallest lambda to fit the model.
+```{r}
+cv_fit <- cv.glmnet(x, y, alpha = 1, family = "binomial")
+cv_fit
+```
+These results show us the smallest lambda and the largest lambda value. The smallest lambda is given by the min row at the Lambda column. $\lambda_{min} = 0.001139$.
+
+```{r, include = FALSE}
+coef(fit.glmnet.5foldCV, s= "lambda.min")
+```
+These results are the coefficients if we use the smallest $\lambda$. To reduce visual clutter by printing a large list of numbers, we'll tell you that only one variable shrank to nothing. Hence, Lasso Regression wasn't very effective for doing variable selection.
+
+```{r, fig.cap = "This graph shows us the log(lambda) against the estimated test error. The dashed vertical lines show us the minimum log(lambda) value. Ideally, we want the smallest lambda that would also give us the smallest estimated test error. We see that the lowest log(lambda) that we were able to find is a little under -7. Take the exponental to get the actual lambda value."}
+
+plot(log(fit.glmnet.5foldCV$lambda), fit.glmnet.5foldCV$cvm, type = 'l', xlab = paste("Values of log(lambda)"), ylab = "Mean Cross-Validated Error", main = "Best Log(lambda) for lowest Estimated Test Error Rate")
+abline(v = log(fit.glmnet.5foldCV$lambda.min), col = 'red')
+```
+
+After trying AIC and Lasso Regression to do variable selection, we'll move on with the model given from doing variable selection through AIC.
+
+subscribe ~ education + housing + loan + contact + day + month + duration + campaign + year
+
+I'm actually very surprised that `balance` is not a significant predictor because the initial assumption was that if a client has a low or negative `balance`, they would be less willing to want to subscribe to the long-term deposit. I can digress with `previous` not being significant because the customers were at least reached in a previous interaction. Whether they'll subscribe is a different story.
+
+---
+
+## Metric and Simple Models
+
+For our recipe, we'll be using the formula `subscribe ~ education + housing + loan + contact + day + month + duration + campaign + year` as selected from the variable selection process. We will not use `pdays` and `poutcome` because they have over 80% missing values, so they're highly unreliable features. It's better to not put them in our model.
+
+We've mentioned previously that there are a small amount of missing data in `education` and `contact`. Since these variables are categorical, we'll use K-nearest neighbors with neighbors = 3 imputation method to fill in for the missing data. We'll also use the following variables to impute: default, balance, housing, loan, day, campaign, previous, year.
+
+We'll use `step_dummy(all_nominal_predictors())` to turn all categorical variables into dummy variables.
+In addition, we'll be using `step_normalize()` -- mean 0 and 1 standard deviation to normalize all of our numerical predictors, so they're all on the same scale. However, we don't normalize `year` because it doesn't make any sense to normalize years. 
+
+```{r}
+## Other variations of the recipe were done in a separate .Rmd file and results were saved to reduce computational time.
+
+## Below is the recipe that we're going forward with after trying the different variations.
+
+bank_train <- bank_train %>% 
+  mutate(across(where(is.character), as.factor)) %>%
+  mutate(subcribe = factor(subscribe))
+
+bank_recipe <- recipe(subscribe ~ education + housing + loan + contact + day + month + duration + campaign + year, data = bank_train) %>%
+  step_impute_knn(contact,education, 
+                  impute_with = imp_vars(housing, loan, day, campaign, year), 
+                  neighbors = 3) %>% 
+  step_normalize(all_numeric_predictors(), -year) %>% 
+  step_dummy(all_nominal_predictors())
+
+# prep(bank_recipe) %>% bake(new_data = bank_train)
+# save(bank_recipe, file = "./Results/bank_recipe.rda")
+```
+
+We've also fitted using logistic, linear discriminant analysis, quadratic discriminant analysis, and k-nearest neighbor models.
+
+```{r, eval= FALSE}
+## Logistic Regression 
+log_model <- logistic_reg() %>%
+  set_engine("glm") %>%
+  set_mode("classification")
+log_wkflow <- workflow() %>%
+  add_recipe(bank_recipe) %>%
+  add_model(log_model)
+log_fit <- fit(log_wkflow, bank_train)
+
+## Linear Discriminant Analyis
+library(discrim)
+lda_model <- discrim_linear() %>% 
+  set_mode("classification") %>% 
+  set_engine("MASS")
+lda_wkflow <- workflow() %>% 
+  add_model(lda_model) %>% 
+  add_recipe(bank_recipe)
+lda_fit <- fit(lda_wkflow, bank_train)
+
+## Quadratic Discriminant Analysis
+qda_model <- discrim_quad() %>% 
+  set_mode("classification") %>% 
+  set_engine("MASS")
+qda_wkflow <- workflow() %>% 
+  add_model(qda_model) %>% 
+  add_recipe(bank_recipe)
+qda_fit <- fit(qda_wkflow, bank_train)
+
+## K-Neaerest Neighbors
+library(kknn)
+knn_model <- nearest_neighbor(neighbors = 5) %>% 
+  set_engine("kknn") %>% 
+  set_mode("classification")
+knn_wkflow <- workflow() %>% 
+  add_model(knn_model) %>% 
+  add_recipe(bank_recipe)
+knn_fit <- fit(knn_wkflow, bank_train)
+```
+
+Here we're using Precision-Recall to figure out the best performing classifier.
+```{r, eval = FALSE}
+log_pr <- augment(log_fit, new_data = bank_train) %>% pr_auc(subscribe, .pred_yes)
+lda_pr <- augment(lda_fit, new_data = bank_train) %>% pr_auc(subscribe, .pred_yes)
+qda_pr <- augment(qda_fit, new_data = bank_train) %>% pr_auc(subscribe, .pred_yes)
+knn_pr <- augment(knn_fit, new_data = bank_train) %>% pr_auc(subscribe, .pred_yes)
+
+pr_compare_no <- tibble(
+  Model = c("Logistic", "LDA", "QDA", "KNN"),
+  pr_AUC = c(
+    log_pr$.estimate,
+    lda_pr$.estimate, 
+    qda_pr$.estimate, 
+    knn_pr$.estimate))
+```
+
+### Precision-Recall Metric
+
+```{r}
+# save(pr_compare_no, file = "./Results/pr_compare_no.rda")
+load("./Results/pr_compare_no.rda")
+pr_compare_no
+```
+We found that Quadratic Discriminant Analysis performed the best because it has the highest area under the precision-recall curve.
+
+We used ROC AUC (Area under the Receiver Operation Characteristics curve) as our metric for model performance comparison. However, the ROC AUC itself are absolutely horrible for all four kinds of classifiers. To put it into perspective, an ROC AUC below 0.5 performance is actually worse than a random classifier.
+
+```{r}
+load("./Results/AUC_compare_train.rda")
+colnames(AUC_compare_train) <- c("Model", "ROC AUC")
+AUC_compare_train
+```
+
+The horrible ROC AUC values are due to the imbalance in our data and ROC doesn't work well with severely imbalanced data. That is we have a abundance of clients who have not subscribed to the term deposit, while a scarce amount that have subscribed to the term deposit. Keep in mind that our goal for this campaign is to develop a predictive model to predict if a client will subscribe to a term deposit.
+
+"Although ROC graphs are widely used to evaluate classifiers under presence of class imbalance, it has a drawback: under class rarity, that is, when the problem of class imbalance is associated to the presence of a low sample size of minority instances, as the estimates can be unreliable."
+— Page 55, Learning from Imbalanced Data Sets, 2018.
+
+[More information on ROC Curves and Precision Recall for Imbalanced Classification](https://machinelearningmastery.com/roc-curves-and-precision-recall-curves-for-imbalanced-classification/)
+
+The website suggest that we use Precision and Recall instead of ROC AUC as our metric.
+
+- "Precision is a metric that quantifies the number of correct positive predictions made."
+
+ - "Recall is a metric that quantifies the number of correct positive predictions made out of all positive predictions that could have been made."
+
+Since both precision and recall focuses on the positive class (minority class)-- clients' response "yes" to subscribing to the term deposit and doesn't concern with the true negatives (majority class, "no" response), this is exactly what we want to focus on.
+
+Hence, the metric that we should use to judge our models is `Precision-Recall` instead of ROC. 
+
+```{r, eval = FALSE}
+## Code for ROC_visual
+QDA_ROC_plot <- augment(qda_fit, new_data = bank_train) %>% 
+  roc_curve(subscribe, .pred_yes) %>%
+  autoplot()
+QDA_ROC_plot + ggtitle("ROC Curve with QDA on Training Data") + 
+  labs(title = "ROC Curve", x = "1 - Specificity", y = "Sensitivity") + theme_minimal()
+```
+
+```{r, fig.cap = "This visualization shows us the performance of the QDA model on our training data using ROC AUC as our metric. Since the area under the curve falls below the dashed-line representing a random classifier, this means that under the ROC AUC metric the QDA classifier is performing much worse than a random classifier. Hence ROC AUC is not an appropriate metric to evaluate our models."}
+
+load("./Results/ROC_pr_plots.RData")
+QDA_ROC_plot
+```
+
+```{r, eval = FALSE}
+## Code for PR visual
+QDA_pr_plot <- augment(qda_fit, new_data = bank_train) %>% 
+  pr_curve(subscribe, .pred_yes) %>%
+  autoplot()
+
+# QDA_pr_plot + geom_hline(yintercept = positive_rate, linetype = "dashed", color = "red") + labs(title = "Precision-Recall Curve", x = "Recall", y = "Precision") + theme_minimal()
+```
+
+```{r, fig.cap= " This visualization shows the precision-recall curve. Ideally, we should see a curve that stays closer to the top right corner if a model is close to perfect. This would indicate a high precision and recall. Since our curve is above the baseline by a lot and the AUC is pretty high. This tells us that the QDA model is performing well under the precision-recall metric."}
+positive_rate <- mean(bank_data$subscribe == "yes")
+load("./Results/ROC_pr_plots.RData")
+
+QDA_pr_plot + geom_hline(yintercept = positive_rate, linetype = "dashed", color = "red") + labs(title = "Precision-Recall Curve", x = "Recall", y = "Precision") + theme_minimal()
+```
+
+### Resampling and SMOTE
+
+```{r, eval = FALSE}
+## Saves both plots to reduce computation time.
+# save(QDA_ROC_plot, QDA_pr_plot, file = "./Results/ROC_pr_plots.RData")
+```
+
+During the recipe building process, we've also tested ways for dealing with imbalanced data. We tried using resampling with ratio of 1 and SMOTE (**S**ynthetic **M**inority **O**versampling **TE**chnique).
+
+[For more information on SMOTE](https://machinelearningmastery.com/smote-oversampling-for-imbalanced-classification/)
+
+Although the purpose of resampling and SMOTE to deal with the imbalance issue response, we expected much better performance. However, our QDA model with the plain recipe actually perform generally the same, so the improvements were pretty marginal.
+
+```{r}
+##  We've already coded the other recipes in a different .Rmd file and saved the results in pr_compare.
+## Here, we're simply updating the tibble with information from the plain recipe.
+
+load("./Results/pr_compare.rda")
+pr_compare # contains all 4 recipes and their respective PR_AUC
+
+# save(pr_compare, file = "./Results/pr_compare.rda")
+```
+
+I was also able to find a Reddit discussion for SMOTE. Generally, people suggest that we don't use SMOTE.
+
+[Reddit Discussion about SMOTE](https://www.reddit.com/r/statistics/comments/1gizk4x/comparison_of_logistic_regression_withwithout/)
+
+To not have to deal with any side effects of resampling such as overfitting, we'll proceed with the plain recipe.
+
+---
+
+## Tuning Models
+
+In this section, we'll be using more complicated models such as Pruned Decision Trees, Boosted Tree, and Random Forest to see how they perform with our data. This section is also called "Tuning Models" because these types of models does contain hyperparameters that requires tuning.
+
+### Pruned Decision Tree
+
+We'll start with a pruned decision tree.
+
+```{r}
+bank_decision_tree <- decision_tree(
+  mode = "classification", 
+  engine = "rpart", 
+  cost_complexity = tune())
+
+bank_wkflow <- workflow() %>% 
+  add_model(bank_decision_tree) %>% 
+  add_recipe(bank_recipe)
+```
+
+```{r, eval = FALSE}
+decision_tree_grid <- grid_regular(cost_complexity(range = c(-3, -1)),
+                        levels = 5)
+tune_result <- tune_grid(bank_wkflow, resamples = bank_fold, grid = decision_tree_grid, metrics = metric_set(pr_auc))
+# save(tune_result, file = "./Results/decisionTree_TuneResult.rda")
+```
+
+```{r, fig.cap = "This graph shows the cost complexity hyperparameter against the area under the precision recall curve. We see a rise in PR AUC as cost complexity increase up to the max. Then there is a sharp decrease, slow decrease, and a long sharp decrease in PR AUC again."}
+load("./Results/decisionTree_TuneResult.rda") # tune_result
+autoplot(tune_result) + ylab("PR AUC")
+```
+
+```{r}
+dec_tree_auc <- collect_metrics(tune_result) %>%
+  filter(.metric == "pr_auc") %>%
+  arrange(desc(mean))
+
+dec_tree_auc[1,]
+```
+Note that `cost_complexity()` also uses the `log10_trans()` function by default, so the values `cost_complexity` values are in the log-10 scale.
+
+From the results, we see that the best cost complexity hyperparameter value is 0.003162278. This comes with the area under the precision recall curve of 0.9851235. This PR_AUC is pretty high compared to the PR_AUC for QDA, which was 0.7611213.
+
+
+```{r}
+paste("PR AUC at", dec_tree_auc[5, ][1], "trees is", round(dec_tree_auc[5, ]$mean, 5))
+```
+Even when at the worst cost complexity in our range, the PR AUC is still better than QDA. 
+
+```{r, warning = FALSE, message = FALSE}
+library(rpart.plot)
+
+best_cp <- select_best(tune_result, metric = "pr_auc")
+
+best_cp_wkflow <- finalize_workflow(bank_wkflow, best_cp)
+
+best_fit <- fit(best_cp_wkflow, data = bank_train)
+
+best_model <- pull_workflow_fit(best_fit)$fit
+
+rpart.plot(best_model, 
+           type = 3,
+           extra = 103,
+           box.palette = "Browns",
+           main = "Best Pruned Decision Tree")
+```
+
+This visual shows the best-performing pruned decision tree with the *training* set. The bottom of the tree shows the class of response (no or yes), the misclassification rate, and the percentage of observations in each node.
+
+Although the decision did a great job at being able to classify the responses, this method does suffer from having variance because one tree will differ from another. Hence, we'll try to other tree methods which are improvements to the pruned decision tree.
+
+### Boosted Tree
+
+The boosted tree approach improves from the single pruned decision tree via *boosting*. Boosting is makes trees sequentially and and each tree is fit on a modified version of the original data set. It then combines trees together to create one predictive model. 
+
+```{r, eval = FALSE}
+library(xgboost)
+boosted <- boost_tree(trees = tune()) %>% 
+  set_engine("xgboost") %>% 
+  set_mode("classification")
+
+boosted_wkflow <- workflow() %>%
+  add_recipe(bank_recipe) %>% 
+  add_model(boosted)
+
+boosted_grid <- grid_regular(trees(range = c(2, 2000)), levels = 10)
+```
+
+```{r, eval = FALSE}
+boosted_tune_reslt <- tune_grid(
+  boosted_wkflow,
+  grid = boosted_grid,
+  resample = bank_fold,
+  metrics = metric_set(pr_auc))
+```
+
+```{r, fig.cap= "This is our try at using boosted tree. The number of trees represent the hyperparameter tree() which represent the number of trees in an ensemble. The y-axis represent  our metric which is the area under the precision recall curve -- we want to find the best number of trees that maximizes this number. From this visual, boosted tree method performs incredibly well because even when after the best number of trees was found and the curve decreases dramatically, the pr_auc actually doesn't change a whole lot. We actually went a bit board with setting the highest number of trees in an ensemble to be 2000 because the best number of trees was found way before reaching 2000 trees."}
+# save(boosted_tune_reslt, file = "boostedTree_Results.rda")
+
+load("./Results/boostedTree_Results.rda") # boosted_tune_reslt
+autoplot(boosted_tune_reslt) + ylab("PR AUC") + xlab("Number of Trees")
+```
+
+```{r}
+boosted_best_auc <- collect_metrics(boosted_tune_reslt) %>%
+  filter(.metric == "pr_auc") %>% 
+  arrange(desc(mean))
+
+boosted_best_auc[1, ]
+```
+From this, we see that the best number of trees in an ensemble to get the maximum area under the precision-recall curve is 10. At this number of trees, we also have very high area under the precision recall curve of 0.9910307.
+
+Compare to the QDA model with $\text{PR AUC} = 0.7611213$, boosted tree method with 10 trees performs a whole lot better at classifying client responses. Even when we have 2000 trees in an ensemble, the performance got boosted tree is still much greater than QDA.
+
+```{r}
+paste("PR AUC at", boosted_best_auc[10, ][1], "trees is", round(boosted_best_auc[10, ]$mean, 5))
+```
+This is still a lot better than PR AUC with QDA.
+
+
+```{r}
+tibble(
+  Method = c(pr_compare_no$Model[3], "best_DecisionTree", "best_BoostedTree"),
+  PR_AUC = c(pr_compare_no$pr_AUC[3], dec_tree_auc[1,]$mean, boosted_best_auc[1,]$mean))
+```
+Comparing the three best methods that we have so far, Boosted Tree has the best performance of all. 
+
+### Random Forest
+
+How this method improves upon the single pruned decision tree is that it creates a large number of trees being bootstrapping, but at each tree split, a random sample of predictors are considered. This process decorrelates the trees, making the predictions more reliable.
+
+```{r}
+bank_rf_mod <- rand_forest(mtry = tune(),
+                                trees = tune(),
+                                min_n = tune()) %>%
+  set_mode("classification") %>% 
+  set_engine("ranger", importance = "impurity")
+
+rf_wkflow <- workflow() %>% 
+  add_model(bank_rf_mod) %>% 
+  add_recipe(bank_recipe)
+```
+
+
+For random forest, we tune the following hyperparameters:
+
+- `mtry` represent the number of predictors that we will be sampling randomly at each tree split when we're building the tree model. 
+- `trees` represent number of trees that are in the ensemble.
+
+- `min_n` represent the smallest number of observations in each tree node that are required for the node to be split further.
+
+```{r}
+rf_grid <- grid_regular(
+  mtry(range = c(1 ,9)),
+  trees(range=c(2, 200)),
+  min_n(range = c(5, 25)), 
+  levels = 5
+  )
+```
+
+`mtry` should not be smaller than 1 because we're telling R to randomly sample from 0 to negative number of predictors at each tree split when building the tree model. It should not be above 9 either because we're only using 9 predictors in our model to randomly sample from.
+
+```{r, eval = FALSE}
+rf_tune_reslt <- tune_grid(
+  rf_wkflow, 
+  grid = rf_grid,
+  resamples = bank_fold,
+  metrics = metric_set(pr_auc)
+  )
+# save(rf_tune_reslt, file = "./Results/rf_tune_reslt.rda")
+```
+
+```{r, fig.cap= "In this chart, we see representations of the minimal nodes from 5 to 25, just as we specified in min_n. We also see the range of 2 to 200 trees as we specificied for number of trees in an ensemble. Also, R did randomly sample from 1 to 9 of our predictors. In terms of performance, the worst numbers of trees in an ensemble given our specified range are 2 trees as shown the the bright orange-red line. On the contrary, the better performing number of trees are more difficult to tell because the lines are all lay on top of each other. This means that they have similar results and doesn't vary as much. To find the best number for the hyperparameters, we'll look at the numbers."}
+load("./Results/rf_tune_reslt.rda") # rf_tune_reslt
+autoplot(rf_tune_reslt) + theme_minimal() + ylab("Area Under PR Curve")
+```
+
+To find the best hyperparameters to maximize area under the precision recall curve, we have the following:
+```{r}
+best <- select_best(rf_tune_reslt, metric = "pr_auc")
+best
+```
+Our best hyperparameters are 7 random predictors to sample from, 150 trees in an ensemble, and a minimum of 25 nodes. These will give us the maximum area under the precision recall curve.
+
+Using the above hyperparameters, we get a the resulting PR AUC:
+```{r}
+best_rf_auc <- collect_metrics(rf_tune_reslt) %>%
+  filter(.metric == "pr_auc") %>% 
+  arrange(desc(mean))
+
+best_rf_auc[1,]$mean
+```
+This number represents the area under the precision-recall curve. 
+
+This has got the be the highest PR AUC yet. We'll put it in the tibble and compare.
+
+## Best Model Reveal
+
+```{r}
+tibble(
+  Method = c(pr_compare_no$Model[3], "best_DecisionTree", "best_BoostedTree", "best_RandomForest"),
+  PR_AUC = c(pr_compare_no$pr_AUC[3], dec_tree_auc[1,]$mean, boosted_best_auc[1,]$mean, best_rf_auc[1,]$mean
+))
+```
+ 
+Comparing the performance of each model using the under the Precision-Recall curve metric, it's actually a very close call between Boosted Tree and Random Forest with the PR AUC being almost 0.99. However, Random Forest is able to pull above Boosted Trees by a tiny bit. 
+
+Hence our best performing model is **Random Forest**!
+
+### Most Useful Variable
+
+To investigate further, we're going to explore which variables were the most useful and which were notin the random forest model. 
+```{r, message = FALSE, fig.cap = "This table ranks the variables in the random forest model from most important to least important."}
+library(vip)
+set.seed(123)
+final_rf_model <- finalize_workflow(rf_wkflow, best)
+final_mod_fit <- fit(final_rf_model, data = bank_train)
+model <- pull_workflow_fit(final_mod_fit)$fit
+vip(model) 
+```
+From this graph, we see that `duration` is by far the most important variable in our model. On the contrary, it seems like the `months` were the least useful in the random forest model. 
+Recall that `duration` represent the last contact duration with a particular client, in seconds.
+
+I'm actually surprised by this because I'd never thought that the `duration` would be the most important. I thought that either `loan`, `balance`, or `housing` would be important because it meant the clients had money to subscribe away. Anyhow, one way to look at how `duration` being the most useful could be that if the phone call lasted longer, it would give the telemarketer more time to persuade the clients into subscribing to the term deposit. Now, if the phone call was shorter, the telemarketer would have a shorter and harder time convincing the clients.
+
+---
+
+## Testing Time!
+
+Now that we found the best performing model on the training data set, we're going to try that model on the testing data set.
+
+```{r}
+# select the best hyperparameter
+best_hyp <- select_best(rf_tune_reslt, metric = "pr_auc")
+
+final_rf_model <- finalize_workflow(rf_wkflow, best_hyp)
+final_mod_fit <- fit(final_rf_model, data = bank_train)
+best_model <- pull_workflow_fit(final_mod_fit)$fit
+```
+
+The following shows how the Random Forest Model performs on the testing data set:
+
+```{r}
+final_mod_test  <- augment(final_mod_fit, new_data = bank_test)
+
+pr <- pr_auc(final_mod_test, truth = subscribe, .pred_yes)
+pr
+```
+Comparing to the 0.9921417 PR AUC for random forest in the training set, there seems to be overfitting involved. However, the difference could also be attributed to the imbalanced balance data that we decided to left alone throughout the model fitting process.
+
+```{r, fig.cap= "This visual shows the performance of the random forest model on testing data set via the area under the precision recall curve metric. Ideally, we want both precision and recall to be one. The craziness in the front of the curve seems like the model struggled at first, but it eventually got better."}
+pr_curve(final_mod_test, truth = subscribe, .pred_yes) %>% autoplot
+```
+
+```{r, fig.cap = "This is a confusion matrix and it is another way to visualize how our classification model performed on the test data set. We see that the model performed well for the negative class and didn't do so well for the positive class. This is probably due to the imbalanced data because we had a lot more data for no than yes responses."}
+conf_mat(final_mod_test, truth = subscribe, .pred_class) %>% 
+  autoplot(type = "heatmap")
+```
+
+--- 
+
+## Research Summary and Discussion
+
+Throughout this project, we followed the data science life cycle
+
+### 1. Understanding The Problem
+
+We made sure to understand the problem by doing background research on the original source of the data. We not only looked through the UC Irvine's Machine Learning Repository for information about the data; we went beyond by reading about the original research paper by Moro et. al in 2011. From this, we were able to get more information such as how the data was organized, the time frame of the data, and how the data were via data mining.
+
+For some context, the data were mined from a telemarketing campaign launched by a Portuguese banking institution from 2008 to 2010. The bank had human agents asking their clients if they would like to subscribe to a long term deposit with the bank. The clients' responses were recorded as `no` or `yes`, along with other information about the client.
+
+With the context of the data in mind, we made sure to come up with appropriate research questions. 
+
+We aligned our main objective with Moro et al. by having our own try at using machine learning to reliably predict if a client would subscribe to the bank's term deposit, given some information about that client. Additionally, we were also interested in learning about the characteristics of the clientele and spot weaknesses in the campaign.
+
+### 2. Preparing Data and Exploring the Data:
+
+To prepare the data, we looked through the four different data sets within the file downloaded from UCI Machine Learning Repository. Since this is our first attempt at this problem, we didn't want to over complicate the problem and struggle with interpretability by having features that were too specialized. Hence, we decided to setting for an older version of the data used in Moro et al.'s work by using the `bank_full`, with contained features that we have adequate understanding of.
+
+We decided to explore the data before splitting. First we looked at the missingness of the data. At first glance, there was no missing data. However, we notice that several observations' inputs had `unknown`. We then re-enter these `unknown` values as `NA` to get a better representation of the data's missingness. We learned that while there are a small of number of missing data in features such as `contact`, `education`, and `martial status`, More alarming percentage of missing were `poutcome` and `pdays`, which corresponded to the previous outcomes of the campaign and number of previous days since the last time the bank had contacted the clients. We were also interested in looking at `previous` which was the number of contacts made to the client. Although this feature had no missing data, its mode was very much 0. This means that this bank had little interaction with the clientele prior to the campaign. This in combination with the high missingness in the other two features shows that the bank had not put much effort into establishing a relationship with the clientele. Hence, this is one of the weaknesses in this telemarketing campaign. Without establishing trust from the clientele, the bank simply cannot expect to have a high subscription rate.
+
+We were also interested in how the observations were ordered. We learned that observations were ordered by the day and month, without noting the year. The issue here was that it was difficult to distinguish two or more matching days. Hence, we added a year variable to distinguish similar dates. We learned from the campaign was effective in getting people to subscribe because there was a gradual increase in proportion of `no` or `yes` responses throughout the years period.
+
+To answer the question about our clientele, we made graphed out the distribution and studied the summary statistics of `job` and `age`. We found that the main clientele for this bank were 35 to 41 years old blue-color or management workers.
+
+Before splitting the data, we look at the proportion of `no` to `yes` responses. We learned that we had an imbalanced of 80% `no` and 20% `yes`. This should be expected given the context of this problem since the bank had a weak relationship with the clientele as shown previously. For data splitting, we used stratified random sampling by the response variable to split the data into 3 portions. We reserved 75% for training and validation. We saved the other 25% of data for testing our best model later on.
+
+As for the metric for model performance comparison, we tried maximizing area under the ROC curve, but this failed miserably for the positive class (`yes`) due to the imbalanced data. We some did external research and learned that maximizing the area under the Precision-Recall curve was a better metric for imbalanced data.
+
+### 3. Variable Selection and Model Fitting:
+
+We employed variable selection by minimizing the AIC (Akaike Information Criterion) and Regularization via Lasso Regression. Variable selection with AIC performance better at reducing the number of features from 15 to 9, while Lasso Regression didn't shrink any features down to 0 at all.
+
+For model fitting, we tried fitting the data via Logistic Regression, Linear Discriminant Analysis, Quadratic Discriminant Analysis, and K-Nearest Neighbors. We learned that QDA performed had the best performance with PR_AUC = 0.7611213. This was fitting without using resampling techniques, so we repeated the process with resampled data and SMOTE. We learned that the performance wasn't relatively the same. We wanted to be conservative, so we proceeded without resampling or SMOTE.
+
+For more complicated model, we employed pruned decision tree, boosted tree, and random forest to to our data. Since all of these models contained hyperparameters that needed to be tune, we used the validation set to tune by finding hyperparameters that would give us the smallest classification error.
+
+### 4. Model Evaluation
+
+When comparing all 4 kinds of models on the training set, we got a much better performance on all three tree based methods using the area under the Precision-Recall curve metric compared to QDA. The difference in performances was about 20% better using tree based methods by the PR AUC metric. However, random forest turned out to be the best performing model with 0.9921417 PR_AUC, beating Boosted Tree by a hair.
+
+### 5. Model Deployment
+
+In this step, we apply our best performing model to the testing data set. The random forest model had an PR_AUC of 0.7306932. Comparing this to the performance on the training set, one could say that there are some overfitting. However, when looking at the confusion matrix, the random forest did an excellent job at classifying the negative `no` responses, which had more observations than the positive `yes` responses. This ties back to the imbalanced data because when there are more data, the classification model learns better and performs better. Given the data for the `yes` class, PR_AUC of 0.7306932 is not too terrible.
+
+### Discussion
+
+Applying these results to the context of the problem, the repercussion of misclassifying a client would be the wasted time and energy. The bank can reallocate the time and energy to target people who would actually subscribe.
+
+Some potential application of this project's results can be used by the marketing team to improve the campaign. We saw that the bank didn't have a strong relationship with the clients based on the missing data and data from previous contacts. The bank can work on establishing a stronger relationship with the clientele. This way, the clientele might have more trust and be more willing to subscribe to the term deposit with the bank. Also, now that we know that `duration` of the phone calls were the most important variable, the bank can focus on getting the clients to stay longer on the calls. This would give the agents more time to advertise the term deposit to the clientele. We saw that the main clientele were 30 to 40 years old management or blue-collar workers. The bank can come up with some incentives to subscribing for that type of demographic. We also saw that time was a factor in the increasing proportion of responses. If we have more data from more years, perhaps we'd have more predictive power for the `yes` class, despite the imbalanced with the `no` class.
+
+### Beyond This Project
+
+Although we chose the simpler data set due to the scope of knowledge and project complexity, there is another data set with more variables `bank_full_additional` that can be explored in the future. This data set contain more features that accounts for the state of the economy at the time, which may have an influence on the responses. A project with that data set might be more robust. Also, when reading through the paper by Moro et al., they noted that in their work, the data were split by year and one year was selected to the be testing set. Instead of splitting the data via stratified random sampling, we can also revisit this work in the future and split the data by year to see how it turn out. Finally, since there are some temporal elements to this project, I wonder if some time series analysis can be applied to this project. However, as of now, time series is beyond the scope my knowledge.
+
+
+![](./Images/Telemarketing-Service.jpg)
